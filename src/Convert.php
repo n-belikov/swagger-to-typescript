@@ -303,8 +303,8 @@ class Convert
                         $subname = $name . $pname;
                         switch ($data["type"]) {
                             case "object":
-                                if (isset($data["schema"]) && isset($data["schema"]['$ref'])) {
-                                    $data["type"] = basename($data["schema"]['$ref']);
+                                if (isset($data['$ref'])) {
+                                    $data["type"] = basename($data['$ref']);
                                 } else {
                                     $this->walkSchemaRecursive([
                                         $subname => $data
