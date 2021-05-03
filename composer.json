@@ -1,0 +1,21 @@
+{
+    "name": "niburkin/swagger-to-typescript",
+    "description": "Swagger to typescript",
+    "authors": [
+        {
+            "name": "Nikita",
+            "email": "evan.gelior@ya.ru"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "NiBurkin\\STT\\": "src"
+        }
+    },
+    "require": {
+        "php": "~7.4",
+        "ext-json": "*",
+        "ext-yaml": "*",
+        "laravel/framework": "^8.0"
+    }
+}
