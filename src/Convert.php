@@ -233,6 +233,11 @@ class Convert
     protected function getBaseType($type, array $data = []): string
     {
         switch ($type) {
+            case "string":
+                if (isset($data["format"]) && $data["format"] == "binary") {
+                    return "blob";
+                }
+                return "string";
             case "array":
                 $array_type = "";
                 if (isset($data["items"]['$ref'])) {
