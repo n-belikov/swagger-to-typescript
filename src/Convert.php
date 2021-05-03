@@ -109,7 +109,7 @@ class Convert
     {
         $output = "";
         foreach ($list as $name => $properties) {
-            $output .= "interface {$name} {\n";
+            $output .= "export interface {$name} {\n";
             foreach ($properties as $property => $data) {
                 if (isset($data["type"])) {
                     $type = $data["type"];
