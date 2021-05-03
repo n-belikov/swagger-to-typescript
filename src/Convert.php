@@ -235,7 +235,7 @@ class Convert
         switch ($type) {
             case "string":
                 if (isset($data["format"]) && $data["format"] == "binary") {
-                    return "blob";
+                    return "Blob";
                 }
                 return "string";
             case "array":
@@ -303,10 +303,14 @@ class Convert
                         $subname = $name . $pname;
                         switch ($data["type"]) {
                             case "object":
-                                $this->walkSchemaRecursive([
-                                    $subname => $data
-                                ], $output);
-                                $data["type"] = $subname;
+                                if (isset($data["schema"]) && isset($data["schema"]['$ref'])) {
+                                    $data["type"] = basename($data["schema"]['$ref']);
+                                } else {
+                                    $this->walkSchemaRecursive([
+                                        $subname => $data
+                                    ], $output);
+                                    $data["type"] = $subname;
+                                }
                                 break;
                             case "array":
                                 if (isset($data["items"]["type"]) && $data["items"]["type"] == "object") {
