@@ -170,6 +170,8 @@ class Convert
                                 $responseType = $schemas[$responseType]['child'] . '[]';
                             }
                         }
+                    } else if (isset($success["type"]) && $success["type"] == "array") {
+                        $responseType = basename($success['items']['$ref']) . '[]';
                     }
                 }
 
