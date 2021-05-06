@@ -144,14 +144,24 @@ class Convert
         foreach ($paths as $_path => $methods) {
             $name = $this->getNameFromPath($_path);
             $url = preg_replace("/\{(.+?)\}/ui", '${\\1}', $_path);
+            $quotes = "'";
+            if (preg_match("/\{(.+?)\}/ui", $_path)) {
+                $quotes = "`";
+            }
 
             foreach ($methods as $method => $item) {
                 $options = $fields = [];
-                $options[] = "method: '" . strtoupper($method) . "'";
                 if (isset($item["parameters"])) {
                     foreach ($item["parameters"] as $param) {
                         if (isset($param["required"]) && $param["required"]) {
-                            $type = $this->getBaseType($param["schema"]["type"]);
+                            if (!isset($param["schema"]["type"])) {
+                                $param["schema"]["type"] = "";
+                            }
+                            $type = $this->getBaseType($param["schema"]["type"], $param["schema"]);
+                            if (empty($type)) {
+                                $type = "any";
+                            }
+
                             $fields[] = "{$param["name"]}: {$type}";
                         }
                     }
@@ -194,6 +204,7 @@ class Convert
                         }
                     }
                 }
+                $options[] = "method: '" . strtoupper($method) . "'";
 
 
                 if (isset($item["parameters_interface"])) {
@@ -209,7 +220,7 @@ class Convert
 
                 $_name = $name . ucfirst($method) . "Request";
 
-                $output .= "export const {$_name} = ({$fields}) => request<{$responseType}>(`{$url}`, { {$options}, ...options })\n\n";
+                $output .= "export const {$_name} = ({$fields}) => request<{$responseType}>({$quotes}{$url}{$quotes}, { {$options}, ...options })\n\n";
             }
         }
 
@@ -234,6 +245,15 @@ class Convert
      */
     protected function getBaseType($type, array $data = []): string
     {
+        if (isset($data["oneOf"])) {
+            $types = array_map(
+                fn($type) => $this->getBaseType($type),
+                array_column($data["oneOf"], "type")
+            );
+
+            return implode("|", $types);
+        }
+
         switch ($type) {
             case "string":
                 if (isset($data["format"]) && $data["format"] == "binary") {
@@ -262,9 +282,10 @@ class Convert
     protected function walkSchemaRecursive($schemas, &$output)
     {
         foreach ($schemas as $name => $schema) {
-
+            $allOf = false;
             if (isset($schema["allOf"])) {
-                $properties = [];
+                $allOf = true;
+                $properties = $schema["properties"] ?? [];
                 $required = [];
                 foreach ($schema["allOf"] as $info) {
                     if (isset($info['$ref'])) {
@@ -275,12 +296,15 @@ class Convert
                         $required = array_merge($required, $info['required']);
                     }
                 }
-                foreach ($properties as $field => &$property) {
+                foreach ($properties as $field => $property) {
                     if (in_array($name, $required)) {
                         unset($property["nullable"]);
                         $property["required"] = true;
                     }
+
+                    $properties[$field] = $property;
                 }
+
                 $schema = [
                     "type" => "object",
                     "properties" => $properties
@@ -299,6 +323,14 @@ class Convert
                 ], $output);
             } else {
                 foreach ($schema["properties"] ?? [] as $property => $data) {
+                    if (isset($data["oneOf"])) {
+                        $types = array_map(
+                            fn($type) => $this->getBaseType($type),
+                            array_column($data["oneOf"], "type")
+                        );
+
+                        $data["type"] = implode("|", $types);
+                    }
                     if (isset($data["type"])) {
                         $pname = ucwords($property, "_");
                         $pname = str_replace("_", "", $pname);
