@@ -59,7 +59,7 @@ class Convert
 
                     if (!empty($entity)) {
                         $name = $name . ucfirst($method) . "Params";
-                        $list[$name] = $entity;
+                        $list[$name] = ["properties" => $entity];
 
                         $info["parameters_interface"] = $name;
                     }
@@ -95,7 +95,15 @@ class Convert
                 }
                 $properties[$property] = $data;
             }
-            $list[$name] = $properties;
+
+            $type = $schema["type"];
+            $values = [];
+            if (isset($schema["enum"])) {
+                $type = "enum";
+                $values = $schema["enum"];
+            }
+
+            $list[$name] = ["properties" => $properties, "type" => $type, "values" => $values];
         }
 
         return $list;
@@ -108,9 +116,12 @@ class Convert
     private function makeInterfaces(array $list): string
     {
         $output = "";
-        foreach ($list as $name => $properties) {
-            $output .= "export interface {$name} {\n";
-            foreach ($properties as $property => $data) {
+        foreach ($list as $name => $schema) {
+
+            $type = $schema["type"] == "enum" ? "enum" : "interface";
+
+            $output .= "export {$type} {$name} {\n";
+            foreach ($schema["properties"] as $property => $data) {
                 if (isset($data["type"])) {
                     $type = $data["type"];
                     switch ($type) {
@@ -127,6 +138,14 @@ class Convert
                     $output .= "\t{$property}: {$type}, \n";
                 }
             }
+
+            if (isset($schema["values"]) && count($schema["values"])) {
+                foreach ($schema["values"] as $value) {
+                    $label = strtoupper($value);
+                    $output .= "\t{$label} = '{$value}', \n";
+                }
+            }
+
             $output .= "}\n\n";
         }
 
@@ -191,7 +210,7 @@ class Convert
                         $body = $body["application/json"]["schema"];
                         if (isset($body['$ref'])) {
                             $fields[] = "body: " . basename($body['$ref']);
-                            $options[] = "json: body";
+                            $options[] = "body";
                         }
                     } else if (isset($body["multipart/form-data"])) {
                         $body = $body["multipart/form-data"]["schema"];
@@ -359,7 +378,7 @@ class Convert
                     $properties[$property] = $data;
                 }
             }
-            $output[$name] = ["type" => $type, "properties" => $properties, "child" => $child];
+            $output[$name] = array_merge($schema, ["type" => $type, "properties" => $properties, "child" => $child]);
         }
     }
 }
