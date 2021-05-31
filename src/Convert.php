@@ -116,9 +116,10 @@ class Convert
     private function makeInterfaces(array $list): string
     {
         $output = "";
+        $index = 0;
         foreach ($list as $name => $schema) {
-
-            $type = $schema["type"] == "enum" ? "enum" : "interface";
+            $index++;
+            $type = ($schema["type"] ?? "") == "enum" ? "enum" : "interface";
 
             $output .= "export {$type} {$name} {\n";
             foreach ($schema["properties"] as $property => $data) {
@@ -146,7 +147,7 @@ class Convert
                 }
             }
 
-            $output .= "}\n\n";
+            $output .= "}\n" . ($index < count($list) ? "\n" : "");
         }
 
         return $output;
@@ -239,7 +240,7 @@ class Convert
 
                 $_name = $name . ucfirst($method) . "Request";
 
-                $output .= "export const {$_name} = ({$fields}) => request<{$responseType}>({$quotes}{$url}{$quotes}, { {$options}, ...options })\n\n";
+                $output .= "\nexport const {$_name} = ({$fields}) => request<{$responseType}>({$quotes}{$url}{$quotes}, { {$options}, ...options })\n";
             }
         }
 
@@ -271,6 +272,9 @@ class Convert
             );
 
             return implode("|", $types);
+        }
+        if (isset($data['$ref'])) {
+            return basename($data['$ref']);
         }
 
         switch ($type) {
