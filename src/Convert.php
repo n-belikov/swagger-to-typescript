@@ -164,6 +164,16 @@ class Convert
         foreach ($paths as $_path => $methods) {
             $name = $this->getNameFromPath($_path);
             $url = preg_replace("/\{(.+?)\}/ui", '${\\1}', $_path);
+
+            if (preg_match_all("/{(.+?)}/", $url, $matches)) {
+                foreach ($matches[0] as $index => $original) {
+                    $value = preg_replace("/([^A-Za-z0-9]+)/", "", ucwords($matches[1][$index], "_-"));
+                    $value = lcfirst($value);
+
+                    $url = str_replace($original, '{' . $value . '}', $url);
+                }
+            }
+
             $quotes = "'";
             if (preg_match("/\{(.+?)\}/ui", $_path)) {
                 $quotes = "`";
@@ -181,6 +191,9 @@ class Convert
                             if (empty($type)) {
                                 $type = "any";
                             }
+                            $param["name"] = ucwords($param["name"], "_");
+                            $param["name"] = str_replace("_", "", $param["name"]);
+                            $param["name"] = lcfirst($param["name"]);
 
                             $fields[] = "{$param["name"]}: {$type}";
                         }
@@ -253,8 +266,9 @@ class Convert
      */
     protected function getNameFromPath(string $path): string
     {
-        $name = ucwords($path, "/-{");
+        $name = ucwords($path, "/-_{");
         $name = preg_replace("/([^A-Za-z0-9]+)/", "", $name);
+
         return $name;
     }
 
