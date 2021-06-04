@@ -219,20 +219,21 @@ class Convert
                 }
 
                 if (isset ($item["requestBody"])) {
+                    $required = !($item["requestBody"]["required"] ?? true) ? "?" : "";
                     $body = $item["requestBody"]["content"];
                     if (isset($body["application/json"])) {
                         $body = $body["application/json"]["schema"];
                         if (isset($body['$ref'])) {
-                            $fields[] = "body: " . basename($body['$ref']);
+                            $fields[] = "body{$required}: " . basename($body['$ref']);
                             $options[] = "body";
                         }
                     } else if (isset($body["multipart/form-data"])) {
                         $body = $body["multipart/form-data"]["schema"];
                         if (isset($body['$ref'])) {
-                            $fields[] = "body: " . basename($body['$ref']);
+                            $fields[] = "body{$required}: " . basename($body['$ref']);
                             $options[] = "body";
                         } else {
-                            $fields[] = "body: FormData";
+                            $fields[] = "body{$required}: FormData";
                             $options[] = "body";
                         }
                     }
