@@ -131,18 +131,21 @@ class Convert
                             break;
                     }
 
+                    $comment = isset($data["description"]) ? "// {$data["description"]}" : "";
+
                     $property = lcfirst(ucwords($property, "_"));
                     $property = str_replace("_", "", $property);
                     if (isset($data["nullable"]) && $data["nullable"]) {
                         $property .= "?";
                     }
-                    $output .= "\t{$property}: {$type}, \n";
+                    $output .= "\t{$property}: {$type}, {$comment}\n";
                 }
             }
 
             if (isset($schema["values"]) && count($schema["values"])) {
                 foreach ($schema["values"] as $value) {
                     $label = strtoupper($value);
+                    $label = preg_replace("/([.-])/ui", "_", $label);
                     $output .= "\t{$label} = '{$value}', \n";
                 }
             }
@@ -282,10 +285,9 @@ class Convert
     {
         if (isset($data["oneOf"])) {
             $types = array_map(
-                fn($type) => $this->getBaseType($type),
-                array_column($data["oneOf"], "type")
+                fn($item) => $this->getBaseType($item["type"], $item),
+                $data["oneOf"]
             );
-
             return implode("|", $types);
         }
         if (isset($data['$ref'])) {
