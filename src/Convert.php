@@ -2,6 +2,8 @@
 
 namespace NiBurkin\STT;
 
+use Illuminate\Support\Str;
+
 /**
  * Class Convert
  * @package NiBurkin\STT
@@ -16,6 +18,7 @@ class Convert
      */
     public function convert(string $swaggerPath): string
     {
+        // Parse yaml file
         $yaml = yaml_parse_file(
             $swaggerPath
         );
@@ -25,17 +28,27 @@ class Convert
         $this->output = "";
 
         $list = array_merge(
+        // Map schemas for normal view
             $this->getSchemaList($schemas),
+
+            // Map paths and add parameters in own interfaces
             $this->getSchemasFromPaths($yaml["paths"], $yaml["components"]["parameters"] ?? [])
         );
 
+        // Make TypeScript interfaces
         $this->output = $this->makeInterfaces($list);
 
+        // Walk on paths to make url requests
         $this->output .= $this->walkOnPaths($yaml["paths"], $schemas);
 
         return $this->output;
     }
 
+    /**
+     * @param array $paths
+     * @param array $base_parameters
+     * @return array
+     */
     private function getSchemasFromPaths(array &$paths, array $base_parameters)
     {
         $list = [];
@@ -48,7 +61,7 @@ class Convert
                             $parameter = $base_parameters[basename($parameter['$ref'])];
                         }
 
-                        if (isset($parameter["in"]) && $parameter["in"] == "query") {
+                        if (isset($parameter["in"]) && $parameter["in"] === "query") {
                             $entity[$parameter["name"]] = $parameter["schema"];
                             if (!isset($parameter["schema"]["nullable"]) && isset($parameter["required"])) {
                                 $entity[$parameter["name"]]["nullable"] = !$parameter["required"];
@@ -81,6 +94,7 @@ class Convert
             foreach ($schema["properties"] ?? [] as $property => $data) {
                 if (!isset($data["type"])) {
                     if (isset($data["allOf"])) {
+                        // TODO: walk on all allOf $ref's
                         $properties[$property] = [
                             "type" => basename($data["allOf"][0]['$ref'])
                         ];
@@ -119,27 +133,21 @@ class Convert
         $index = 0;
         foreach ($list as $name => $schema) {
             $index++;
-            $type = ($schema["type"] ?? "") == "enum" ? "enum" : "interface";
+            $type = ($schema["type"] ?? "") === "enum" ? "enum" : "interface";
 
             $output .= "export {$type} {$name} {\n";
             foreach ($schema["properties"] as $property => $data) {
-                if (isset($data["type"])) {
-                    $type = $data["type"];
-                    switch ($type) {
-                        default:
-                            $type = $this->getBaseType($type, $data);
-                            break;
-                    }
+                $type = $data["type"] ?? null;
+                $type = $this->getBaseType($type, $data);
 
-                    $comment = isset($data["description"]) ? "// {$data["description"]}" : "";
+                $comment = isset($data["description"]) ? "// {$data["description"]}" : "";
 
-                    $property = lcfirst(ucwords($property, "_"));
-                    $property = str_replace("_", "", $property);
-                    if (isset($data["nullable"]) && $data["nullable"]) {
-                        $property .= "?";
-                    }
-                    $output .= "\t{$property}: {$type}, {$comment}\n";
+                $property = lcfirst(ucwords($property, "_"));
+                $property = str_replace("_", "", $property);
+                if (isset($data["nullable"]) && $data["nullable"]) {
+                    $property .= "?";
                 }
+                $output .= "\t{$property}: {$type}, {$comment}\n";
             }
 
             if (isset($schema["values"]) && count($schema["values"])) {
@@ -194,9 +202,8 @@ class Convert
                             if (empty($type)) {
                                 $type = "any";
                             }
-                            $param["name"] = ucwords($param["name"], "_");
-                            $param["name"] = str_replace("_", "", $param["name"]);
-                            $param["name"] = lcfirst($param["name"]);
+
+                            $param["name"] = Str::camel($param["name"]);
 
                             $fields[] = "{$param["name"]}: {$type}";
                         }
@@ -212,17 +219,17 @@ class Convert
                     if (isset($success['$ref'])) {
                         $responseType = basename($success['$ref']);
                         if (isset($schemas[$responseType])) {
-                            if ($schemas[$responseType]["type"] == "array" && $schemas[$responseType]["child"]) {
+                            if ($schemas[$responseType]["type"] === "array" && $schemas[$responseType]["child"]) {
                                 $responseType = $schemas[$responseType]['child'] . '[]';
                             }
                         }
-                    } else if (isset($success["type"]) && $success["type"] == "array") {
+                    } else if (isset($success["type"]) && $success["type"] === "array") {
                         $responseType = basename($success['items']['$ref']) . '[]';
                     }
                 }
 
                 if (isset ($item["requestBody"])) {
-                    $required = !($item["requestBody"]["required"] ?? true) ? "?" : "";
+                    $required = !($item["requestBody"]["required"] ?? true);
                     $body = $item["requestBody"]["content"];
                     if (isset($body["application/json"])) {
                         $body = $body["application/json"]["schema"];
@@ -232,7 +239,8 @@ class Convert
                         $this->mapBodySchema($body, $required, $fields, $options);
                     }
                 }
-                $options[] = "method: '" . strtoupper($method) . "'";
+
+                $options[] = sprintf("method: '%s'", strtoupper($method));
 
 
                 if (isset($item["parameters_interface"])) {
@@ -246,9 +254,17 @@ class Convert
 
                 $fields = implode(", ", $fields);
 
-                $_name = $name . ucfirst($method) . "Request";
+                $_name = $name . ucfirst(strtolower($method)) . "Request";
 
-                $output .= "\nexport const {$_name} = ({$fields}) => request<{$responseType}>({$quotes}{$url}{$quotes}, { {$options}, ...options })\n";
+
+                $output .= sprintf(
+                    "\nexport const %s = (%s) => request<%s>(%s, { %s, ...options })\n",
+                    $_name,
+                    $fields,
+                    $responseType,
+                    $quotes . $url . $quotes,
+                    $options
+                );
             }
         }
 
@@ -262,9 +278,9 @@ class Convert
      */
     protected function mapBodySchema(array $schema, bool $isRequired, array &$fields, array &$options): void
     {
-        // TODO: Fix mapping base types
         $type = $schema["type"] ?? "object";
-        $prefix = "body{$isRequired}: ";
+        $required = $isRequired ? "?" : "";
+        $prefix = "body{$required}: ";
         if ($type === "array") {
             $fields[] = $prefix . basename($schema["items"]['$ref']) . '[]';
         } else if (isset($schema['$ref'])) {
@@ -307,7 +323,7 @@ class Convert
 
         switch ($type) {
             case "string":
-                if (isset($data["format"]) && $data["format"] == "binary") {
+                if (isset($data["format"]) && $data["format"] === "binary") {
                     return "Blob";
                 }
                 return "string";
@@ -367,7 +383,7 @@ class Convert
             $properties = [];
             $child = null;
 
-            if ($type == "array") {
+            if ($type === "array") {
                 $child = $name . "Items";
                 $this->walkSchemaRecursive([
                     $child => $schema["items"]
@@ -383,9 +399,7 @@ class Convert
                         $data["type"] = implode("|", $types);
                     }
                     if (isset($data["type"])) {
-                        $pname = ucwords($property, "_");
-                        $pname = str_replace("_", "", $pname);
-                        $subname = $name . $pname;
+                        $subname = $name . Str::studly($property);
                         switch ($data["type"]) {
                             case "object":
                                 if (isset($data['$ref'])) {
@@ -398,7 +412,7 @@ class Convert
                                 }
                                 break;
                             case "array":
-                                if (isset($data["items"]["type"]) && $data["items"]["type"] == "object") {
+                                if (isset($data["items"]["type"]) && $data["items"]["type"] === "object") {
                                     $this->walkSchemaRecursive([
                                         $subname => $data["items"]
                                     ], $output);
