@@ -226,19 +226,10 @@ class Convert
                     $body = $item["requestBody"]["content"];
                     if (isset($body["application/json"])) {
                         $body = $body["application/json"]["schema"];
-                        if (isset($body['$ref'])) {
-                            $fields[] = "body{$required}: " . basename($body['$ref']);
-                            $options[] = "body";
-                        }
+                        $this->mapBodySchema($body, $required, $fields, $options);
                     } else if (isset($body["multipart/form-data"])) {
                         $body = $body["multipart/form-data"]["schema"];
-                        if (isset($body['$ref'])) {
-                            $fields[] = "body{$required}: " . basename($body['$ref']);
-                            $options[] = "body";
-                        } else {
-                            $fields[] = "body{$required}: FormData";
-                            $options[] = "body";
-                        }
+                        $this->mapBodySchema($body, $required, $fields, $options);
                     }
                 }
                 $options[] = "method: '" . strtoupper($method) . "'";
@@ -262,6 +253,26 @@ class Convert
         }
 
         return $output;
+    }
+
+    /**
+     * @param array $schema
+     * @param array $fields
+     * @param array $options
+     */
+    protected function mapBodySchema(array $schema, bool $isRequired, array &$fields, array &$options): void
+    {
+        // TODO: Fix mapping base types
+        $type = $schema["type"] ?? "object";
+        $prefix = "body{$isRequired}: ";
+        if ($type === "array") {
+            $fields[] = $prefix . basename($schema["items"]['$ref']) . '[]';
+        } else if (isset($schema['$ref'])) {
+            $fields[] = $prefix . basename($schema['$ref']);
+        } else {
+            $fields[] = $prefix . "FormData";
+        }
+        $options[] = "body";
     }
 
     /**
@@ -330,7 +341,7 @@ class Convert
                 foreach ($schema["allOf"] as $info) {
                     if (isset($info['$ref'])) {
                         $basename = basename($info['$ref']);
-                        $properties = array_merge($properties, $schemas[$basename]["properties"] ?? []);
+                        $properties = array_merge($schemas[$basename]["properties"] ?? [], $properties);
                     }
                     if (isset($info['required'])) {
                         $required = array_merge($required, $info['required']);
