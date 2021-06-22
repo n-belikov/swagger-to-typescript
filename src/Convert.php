@@ -225,6 +225,8 @@ class Convert
                         }
                     } else if (isset($success["type"]) && $success["type"] === "array") {
                         $responseType = basename($success['items']['$ref']) . '[]';
+                    } else if (isset($success["type"])) {
+                        $responseType = $this->getBaseType($success["type"], $success);
                     }
                 }
 
@@ -310,6 +312,9 @@ class Convert
      */
     protected function getBaseType($type, array $data = []): string
     {
+        if ($type == "test") {
+            dd($data);
+        }
         if (isset($data["oneOf"])) {
             $types = array_map(
                 fn($item) => $this->getBaseType($item["type"], $item),
@@ -333,6 +338,9 @@ class Convert
                     $array_type = basename($data["items"]['$ref']);
                 } else if (isset($data["items"]["type"])) {
                     $array_type = $this->getBaseType($data["items"]["type"], $data);
+                }
+                if (isset($data['items']['oneOf'])) {
+                    return "Array<{$array_type}>";
                 }
                 return "{$array_type}[]";
             case "integer":
@@ -412,7 +420,10 @@ class Convert
                                 }
                                 break;
                             case "array":
-                                if (isset($data["items"]["type"]) && $data["items"]["type"] === "object") {
+                                if (isset($data['items']['oneOf'])) {
+                                    $type = $this->getBaseType($data["items"]["type"] ?? "object", $data["items"]);
+                                    $data["items"]["type"] = $type;
+                                } else if (isset($data["items"]["type"]) && $data["items"]["type"] === "object") {
                                     $this->walkSchemaRecursive([
                                         $subname => $data["items"]
                                     ], $output);
