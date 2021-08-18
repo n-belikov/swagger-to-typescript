@@ -3,8 +3,12 @@
 namespace NiBurkin\STT\Commands;
 
 use Illuminate\Console\Command;
-use NiBurkin\STT\Convert;
+use Atwinta\STT\Convert;
 
+/**
+ * Class ConvertSwaggerCommand
+ * @package NiBurkin\STT\Commands
+ */
 class ConvertSwaggerCommand extends Command
 {
     protected $signature = "convert:swagger {path} {output}";
